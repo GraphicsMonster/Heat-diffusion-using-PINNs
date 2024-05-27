@@ -41,9 +41,18 @@ class PINN(nn.Module):
         out = self.tanh(out)
         out = self.linear4(out)
         return out
-    
 
-def pinn_loss(model, alpha, x, t):
+# Generating data points for training
+x_colloc = torch.rand(10000, 1, requires_grad=True)
+t_colloc = torch.rand(10000, 1, requires_grad=True)
+
+x_boundary = torch.cat([torch.zeros(5000, 1), torch.ones(5000, 1)], dim=0)
+t_boundary = torch.rand(10000, 1)
+
+x_initial = torch.rand(10000, 1)
+t_initial = torch.zeros(10000, 1)
+
+def pde_loss(model, x, t):
     x.requires_grad = True
     t.requires_grad = True
     u = model(x, t)
@@ -55,41 +64,21 @@ def pinn_loss(model, alpha, x, t):
     physics_loss = torch.mean(physics_loss**2)
     return physics_loss
 
-def bc_training(model, optimizer, num_epochs):
-    # Trains for the first BC
-    zero_space = torch.zeros((1000, 1), requires_grad=True)
-    time = torch.rand((1000, 1), requires_grad=True)
-    print("Training on BCs..........")
-    BC_training_compact(model, optimizer, zero_space, time, num_epochs, 1)
+def boundary_loss(model, x, t):
+    x.requires_grad = True
+    t.requires_grad = True
+    u = model(x, t)
+    loss = torch.mean(torch.square(u))
+    return loss
 
-    final_coords = torch.ones((1000, 1), requires_grad=True)
-    time = torch.rand((1000, 1), requires_grad=True)
-    BC_training_compact(model, optimizer, final_coords, time, num_epochs, 2)
-
-    space_coords = torch.rand((1000, 1), requires_grad=True)
-    time = torch.zeros((1000, 1), requires_grad=True)
-    for epoch in range(num_epochs):
-        loss = BC3_loss(model, space_coords, time)
-        loss.backward()
-        optimizer.step()
-        if epoch%100 == 0:
-            print(f"BC: 3, epoch: {epoch}, BC_loss: {loss.item()}")
-
-
-def BC_training_compact(model, optimizer, x, t, num_epochs, BC): # for whenever the boundary conditions imply that the value of the function is 0. conditions 1 and 2
-    for epoch in range(num_epochs):
-        u = model(x, t)
-        loss = torch.mean(torch.square(u))
-        loss.backward()
-        optimizer.step()
-        if epoch%100 == 0:
-            print(f"BC: {BC}, epoch: {epoch}, BC_loss: {loss.item()}")
-
-def BC3_loss(model, x, t):
+def initial_loss(model, x, t):
+    x.requires_grad = True
+    t.requires_grad = True
     u = model(x, t)
     correct_vals = torch.sin(math.pi * x)
     loss = torch.mean((correct_vals - u)**2)
     return loss
+
 
 def check_parameters(model):
     # to verify that training did produce changes in the parameters.
@@ -102,37 +91,22 @@ def check_parameters(model):
 model = PINN(2, 25, 1)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
 
-initial_params = check_parameters(model)
-
 def analytical_solution(x, t, alpha):
     return torch.exp(-alpha * (torch.pi ** 2) * t) * torch.sin(torch.pi * x)
-
-
-# Training on BCs first
-bc_training(model, optimizer, num_epochs=epochs)
-
-final_params = check_parameters(model)
-
-
-# Generating random data -- Have no idea if any of these points will actually satisfy this equation or nah but I'll iterate.
-x = torch.rand(100) * (1 - 0) + 0
-t = torch.rand(100) * (1 - 0) + 0
-X, T = torch.meshgrid(x, t)
-x_colloc = torch.tensor(X.flatten(), dtype=torch.float32).view(-1, 1)
-t_colloc = torch.tensor(T.flatten(), dtype=torch.float32).view(-1, 1)
-
-print("x_colloc shape: ", x_colloc.shape)
-print("t_colloc shape: ", t_colloc.shape)
 
 
 # Training on the pde loss
 for epoch in range(epochs):
     optimizer.zero_grad()
-    loss = pinn_loss(model, alpha, x_colloc, t_colloc) # calcualtes physics loss per epoch
-    loss.backward()
+    eq_loss = pde_loss(model, x_colloc, t_colloc)
+    bc_loss = boundary_loss(model, x_boundary, t_boundary)
+    init_loss = initial_loss(model, x_initial, t_initial)
+
+    total_loss = eq_loss + bc_loss + init_loss
+    total_loss.backward()
     optimizer.step()
     if epoch%100 == 0:
-        print(f"epoch: {epoch}, loss: {loss.item()}")
+        print(f"epoch: {epoch}, loss: {total_loss.item()}")
 
 # Plot results
 x_plot = torch.linspace(0, 1, 500).view(-1, 1)
