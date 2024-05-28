@@ -7,7 +7,9 @@ $$\frac{\partial u}{\partial t} = \alpha \frac{\partial^2 u}{\partial x^2}$$
 where $u$ is the temperature, $t$ is time, $x$ is the spatial coordinate and $\alpha$ is the thermal diffusivity. The boundary conditions are given by:
 
 $$u(0, t) = 0$$
+
 $$u(1, t) = 1$$
+
 $$u(x, 0) = sin(pi*x)$$
 
 The domain of the problem is $x \in [0, 1]$ and $t \in [0, 1]$. The thermal diffusivity is set to 0.03. The analytical solution to this problem is given by:
@@ -24,4 +26,4 @@ See for yourself:
 
 ![The model's solution(not fully trained) vs the analytical(true) solution](iteration_2.png)
 ![The model's solution(not fully trained) vs the analytical(true) solution](iteration_3.png)
-![The model's solution(trained) vs the analytical(true) solution](final fit.png)
+![The model's solution(trained) vs the analytical(true) solution](final_fit.png)
